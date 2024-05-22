@@ -74,6 +74,8 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
     scheduler = WarmUpCosine(optim, total_steps=total_steps, warmup_steps=warmup_steps, learning_rate_base=LEARNING_RATE, warmup_learning_rate=0.0)
 
     model_path_pre = './model'
+    if not os.path.exists(model_path_pre):
+        os.makedirs(model_path_pre)
     model_name = f'mae_pretrain_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
     model_path = os.path.join(model_path_pre, model_name)
 
