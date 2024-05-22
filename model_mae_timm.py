@@ -8,6 +8,38 @@ from einops.layers.torch import Rearrange
 
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
+from torch.optim.lr_scheduler import LRScheduler
+import torch.optim as optim
+
+
+class WarmUpCosine(LRScheduler):
+    def __init__(self, optimizer: optim,
+                 total_steps: int,
+                 warmup_steps: int,
+                 learning_rate_base: float,
+                 warmup_learning_rate: float,
+                 last_epoch: int = -1):
+        self.learning_rate_base = learning_rate_base
+        self.total_steps = total_steps
+        self.warmup_learning_rate = warmup_learning_rate
+        self.warmup_steps = warmup_steps
+        self.pi = np.pi
+        super(WarmUpCosine, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        step = self.last_epoch + 1
+
+        if step > self.total_steps:
+            return [0.0 for _ in self.base_lrs]
+
+        cos_annealed_lr = 0.5 * self.learning_rate_base * (1 + np.cos(self.pi * (step - self.warmup_steps) / (self.total_steps - self.warmup_steps)))
+
+        if step < self.warmup_steps:
+            slope = (self.learning_rate_base - self.warmup_learning_rate) / self.warmup_steps
+            warmup_rate = slope * step + self.warmup_learning_rate
+            return [warmup_rate for _ in self.base_lrs]
+        else:
+            return [cos_annealed_lr for _ in self.base_lrs]
 
 
 def random_indexes(size: int):
@@ -89,7 +121,7 @@ class MAE_Decoder(torch.nn.Module):
                  image_size=32,
                  patch_size=2,
                  emb_dim=192,
-                 num_layer=4,
+                 num_layer=6,
                  num_head=3,
                  ) -> None:
         super().__init__()
@@ -137,7 +169,7 @@ class MAE_ViT(torch.nn.Module):
                  emb_dim=192,
                  encoder_layer=12,
                  encoder_head=3,
-                 decoder_layer=4,
+                 decoder_layer=6,
                  decoder_head=3,
                  mask_ratio=0.75,
                  ) -> None:
