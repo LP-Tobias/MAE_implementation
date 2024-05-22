@@ -88,7 +88,11 @@ DEC_TRANSFORMER_UNITS = [DEC_PROJECTION_DIM * 2, DEC_PROJECTION_DIM]
 dataloader, train_set, test_set = prepare_data_cifar(DATA_DIR, INPUT_SHAPE, IMAGE_SIZE, BATCH_SIZE)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = MAE_ViT().to(device)
+model = MAE_ViT()
+if torch.cuda.device_count() > 1:
+    print(f"Use {torch.cuda.device_count()} GPUs.")
+    model = nn.DataParallel(model)
+model = model.to(device)
 
 optim = torch.optim.AdamW(model.parameters(),
                           lr=LEARNING_RATE * BATCH_SIZE / 256,
