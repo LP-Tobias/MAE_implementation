@@ -30,7 +30,7 @@ setup_seed()
 
 # DATA
 # BUFFER_SIZE = 1024
-BATCH_SIZE = 1024
+BATCH_SIZE = 512
 INPUT_SHAPE = (32, 32, 3)
 NUM_CLASSES = 10
 DATA_DIR = './data'
