@@ -90,7 +90,6 @@ class MAE_Encoder(torch.nn.Module):
         self.patchify = torch.nn.Conv2d(3, emb_dim, patch_size, patch_size)
 
         self.transformer = torch.nn.Sequential(*[Block(emb_dim, num_head) for _ in range(num_layer)])
-
         self.layer_norm = torch.nn.LayerNorm(emb_dim)
 
         self.init_weight()
