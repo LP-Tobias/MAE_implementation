@@ -70,19 +70,13 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
     model_path = os.path.join(model_path_pre, model_name)
 
     if experiment_name == 'linear_probe' or experiment_name == 'fine_tune':
-        model = torch.load(model_path)
+        read_model = torch.load(model_path)
+        encoder = read_model.module.encoder
     elif experiment_name == 'from_scratch':
-        model = MAE_ViT(decoder_layer=decoder_depth, mask_ratio=mask_ratio)
+        init_model = MAE_ViT(decoder_layer=decoder_depth, mask_ratio=mask_ratio)
+        encoder = init_model.encoder
 
-    if torch.cuda.device_count() > 1:
-        print(f"Use {torch.cuda.device_count()} GPUs.")
-        model = nn.DataParallel(model)
-
-    model = ViT_Classifier(model.encoder, num_classes=NUM_CLASSES).to(device)
-
-    if torch.cuda.device_count() > 1:
-        print(f"Use {torch.cuda.device_count()} GPUs.")
-        model = nn.DataParallel(model)
+    model = ViT_Classifier(encoder, num_classes=NUM_CLASSES).to(device)
 
     print('model_loaded')
 
