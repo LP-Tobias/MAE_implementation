@@ -162,7 +162,7 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
 
     history_json = json.dumps(history)
     save_history_to_gcs(history_json, experiment_name + '_' + model_name)
-    print(history)
+    # print(history)
     print(f'Experiment {experiment_name}_{model_name} is done!')
     print('-----------------------------------------------')
 
