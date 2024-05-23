@@ -174,8 +174,8 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
 
 if __name__ == '__main__':
 
-    # mask_ratios = [0.3, 0.5, 0.75, 0.85]
-    mask_ratios = [0.75]
+    mask_ratios = [0.3, 0.5, 0.75, 0.85]
+    # mask_ratios = [0.75]
 
     for mask_ratio in mask_ratios:
         experiment_name = 'linear_probe'
