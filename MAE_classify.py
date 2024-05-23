@@ -115,10 +115,10 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
 
     for e in range(EPOCHS):
         if experiment_name == 'linear_probe':
-            model.patchify.eval()
-            model.transformer.eval()
-            model.layer_norm.eval()
-            model.head.train()
+            model.module.patchify.eval()
+            model.module.transformer.eval()
+            model.module.layer_norm.eval()
+            model.module.head.train()
         else:
             model.train()
 
