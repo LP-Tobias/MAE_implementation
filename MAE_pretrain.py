@@ -28,8 +28,12 @@ from PIL import Image
 
 setup_seed()
 
+# These are some default parameters.
+# For the encoder/decoder setting refer to model_mae_timm.py, I initialize the pretraining model using MAE_ViT method.
+# OBS!!!: Don't forget to look at the utils.py and change the name of the bucket to your own bucket name.
+
+
 # DATA
-# BUFFER_SIZE = 1024
 BATCH_SIZE = 512
 INPUT_SHAPE = (32, 32, 3)
 NUM_CLASSES = 10
@@ -39,22 +43,25 @@ DATA_DIR = './data'
 LEARNING_RATE = 1.5e-4
 WEIGHT_DECAY = 0.05
 
-# Pretraining parameters
-EPOCHS = 200
+# Pretraining parameters. Epochs here.
+EPOCHS = 100
 
 # Augmentation parameters
 IMAGE_SIZE = 32
 PATCH_SIZE = 2
-# NUM_PATCHES = (IMAGE_SIZE // PATCH_SIZE) ** 2
 MASK_PROPORTION = 0.75
 
 # Encoder and Decoder parameters
 LAYER_NORM_EPS = 1e-6
 
+
 train_dataloader, test_dataloader, train_set, test_set = prepare_data_cifar(DATA_DIR, INPUT_SHAPE, IMAGE_SIZE, BATCH_SIZE)
 
 
-def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
+def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=4):
+    # for now the input only takes mask_ratio and decoder_depth.
+    # for more experiments coming remember to also chang the name for model path, history name and so on.
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MAE_ViT(decoder_layer=decoder_depth, mask_ratio=mask_ratio)
     if torch.cuda.device_count() > 1:
@@ -78,6 +85,8 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
         os.makedirs(model_path_pre)
     model_name = f'mae_pretrain_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
     model_path = os.path.join(model_path_pre, model_name)
+    # the model path should be a model folder that contain all the weights from the pretrained model
+    # Moving on to do the classification task, we will load the model from this folder, and use Vit_Classfiier to do the classification task.
 
     image_path = experiment_name + '/images'
 
@@ -98,17 +107,14 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
             predicted_img, mask = model(img)
             loss = torch.mean((predicted_img - img) ** 2 * mask) / MASK_PROPORTION
             loss.backward()
-            if step_count % 1 == 0:
-                optim.step()
-                optim.zero_grad()
+            optim.step()
+            optim.zero_grad()
             losses.append(loss.item())
         scheduler.step()
         avg_loss = sum(losses) / len(losses)
-        # writer.add_scalar('mae_loss', avg_loss, global_step=e)
         print(f'In epoch {e}, average traning loss is {avg_loss}.')
         history['loss'].append(avg_loss)
 
-        ''' visualize the first 16 predicted images on val dataset'''
         model.eval()
         with torch.no_grad():
             val_img = torch.stack([test_set[i][0] for i in range(8)])
@@ -122,6 +128,7 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
             image.save(image_buffer, format='JPEG')
             image_buffer.seek(0)
             upload_blob_from_memory(image_buffer, image_path + f'epoch_{e}.jpg', 'image/jpeg')
+            # this saves the image to the bucket, inside a folder.
 
         ''' save '''
         torch.save(model, model_path)
@@ -130,20 +137,22 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
     save_history_to_gcs(history_json, experiment_name)
 
 
-mask_ratios = [0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85]
+# here is where I do the pretraining.
+
+mask_ratios = [0.3, 0.5, 0.75, 0.85]
 decoder_depths = [2, 4, 6, 8]
 
 for mask_ratio in mask_ratios:
-    experiment_name = f'pretrain_mask_ratio_{mask_ratio}_decoder_depth_6'
+    experiment_name = f'e_{EPOCHS}_pretrain_mask_ratio_{mask_ratio}_decoder_depth_4'
     pre_train(experiment_name, mask_ratio)
     print(f'Experiment {experiment_name} is done!')
     print('-----------------------------------------------')
 
-for decoder_depth in decoder_depths:
-    experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
-    pre_train(experiment_name, 0.75, decoder_depth)
-    print(f'Experiment {experiment_name} is done!')
-    print('-----------------------------------------------')
+# for decoder_depth in decoder_depths:
+#     experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
+#     pre_train(experiment_name, 0.75, decoder_depth)
+#     print(f'Experiment {experiment_name} is done!')
+#     print('-----------------------------------------------')
 
 
 
