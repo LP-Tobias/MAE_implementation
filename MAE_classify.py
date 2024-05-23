@@ -40,11 +40,11 @@ NUM_CLASSES = 10
 DATA_DIR = './data'
 
 # Optimizer parameters
-LEARNING_RATE = 1.5e-4
+LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0.05
 
-# Pretraining parameters. Epochs here.
-EPOCHS = 100
+# Fewer epochs for fine-tuning and linear probing
+EPOCHS = 20
 
 # Augmentation parameters
 IMAGE_SIZE = 32
@@ -54,16 +54,27 @@ MASK_PROPORTION = 0.75
 # Encoder and Decoder parameters
 LAYER_NORM_EPS = 1e-6
 
-
 train_dataloader, test_dataloader, train_set, test_set = prepare_data_cifar(DATA_DIR, INPUT_SHAPE, IMAGE_SIZE, BATCH_SIZE)
 
 
-def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
+def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
     # for now the input only takes mask_ratio and decoder_depth.
     # for more experiments coming remember to also chang the name for model path, history name and so on.
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = MAE_ViT(decoder_layer=decoder_depth, mask_ratio=mask_ratio)
+
+    model_path_pre = './model'
+    if not os.path.exists(model_path_pre):
+        os.makedirs(model_path_pre)
+    model_name = f'mae_pretrain_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
+    model_path = os.path.join(model_path_pre, model_name)
+
+    if experiment_name == 'linear_probe' or experiment_name == 'fine_tune':
+        model = torch.load(model_path, map_location='cpu')
+    elif experiment_name == 'from_scratch':
+        model = MAE_ViT(decoder_layer=decoder_depth, mask_ratio=mask_ratio)
+
+    model = ViT_Classifier(model.encoder, num_classes=NUM_CLASSES).to(device)
     if torch.cuda.device_count() > 1:
         print(f"Use {torch.cuda.device_count()} GPUs.")
         model = nn.DataParallel(model)
@@ -71,7 +82,7 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
 
     optim = torch.optim.AdamW(model.parameters(),
                               lr=LEARNING_RATE * BATCH_SIZE / 256,
-                              betas=(0.9, 0.95),
+                              betas=(0.9, 0.999),
                               weight_decay=WEIGHT_DECAY)
 
     total_steps = int((len(train_set) / BATCH_SIZE) * EPOCHS)
@@ -80,76 +91,98 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=6):
 
     scheduler = WarmUpCosine(optim, total_steps=total_steps, warmup_steps=warmup_steps, learning_rate_base=LEARNING_RATE, warmup_learning_rate=0.0)
 
-    model_path_pre = './model'
-    if not os.path.exists(model_path_pre):
-        os.makedirs(model_path_pre)
-    model_name = f'mae_pretrain_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
-    model_path = os.path.join(model_path_pre, model_name)
-    # the model path should be a model folder that contain all the weights from the pretrained model
-    # Moving on to do the classification task, we will load the model from this folder, and use Vit_Classfiier to do the classification task.
+    loss_fn = torch.nn.CrossEntropyLoss()
+    acc_fn = lambda logit, label: torch.mean((logit.argmax(dim=-1) == label).float())
 
-    image_path = experiment_name + '/images'
-
+    best_val_acc = 0
     step_count = 0
     optim.zero_grad()
 
     history = {
         'experiment': experiment_name,
-        'loss': []
+        'model': model_name,
+        'train_loss': [],
+        'val_loss': [],
+        'acc_train': [],
+        'acc_val': [],
+        'best_val_acc': 0
     }
 
     for e in range(EPOCHS):
-        model.train()
+        if experiment_name == 'linear_probe':
+            model.patchify.eval()
+            model.transformer.eval()
+            model.layer_norm.eval()
+            model.head.train()
+        else:
+            model.train()
+
         losses = []
+        acces = []
         for img, label in tqdm(iter(train_dataloader)):
             step_count += 1
             img = img.to(device)
-            predicted_img, mask = model(img)
-            loss = torch.mean((predicted_img - img) ** 2 * mask) / MASK_PROPORTION
+            label = label.to(device)
+            logits = model(img)
+            loss = loss_fn(logits, label)
+            acc = acc_fn(logits, label)
             loss.backward()
             optim.step()
             optim.zero_grad()
             losses.append(loss.item())
+            acces.append(acc.item())
         scheduler.step()
-        avg_loss = sum(losses) / len(losses)
-        print(f'In epoch {e}, average traning loss is {avg_loss}.')
-        history['loss'].append(avg_loss)
+        avg_train_loss = sum(losses) / len(losses)
+        avg_train_acc = sum(acces) / len(acces)
+        print(f'In epoch {e}, average training loss is {avg_train_loss}, average training acc is {avg_train_acc}.')
+        history['train_loss'].append(avg_train_loss)
+        history['acc_train'].append(avg_train_acc)
 
         model.eval()
         with torch.no_grad():
-            val_img = torch.stack([test_set[i][0] for i in range(8)])
-            val_img = val_img.to(device)
-            predicted_val_img, mask = model(val_img)
-            predicted_val_img = predicted_val_img * mask + val_img * (1 - mask)
-            img = torch.cat([val_img * (1 - mask), predicted_val_img, val_img], dim=0)
-            img = rearrange(img, '(v h1 w1) c h w -> c (h1 h) (w1 v w)', w1=2, v=3)
-            image = tensor_to_image(img)
-            image_buffer = io.BytesIO()
-            image.save(image_buffer, format='JPEG')
-            image_buffer.seek(0)
-            upload_blob_from_memory(image_buffer, image_path + f'epoch_{e}.jpg', 'image/jpeg')
-            # this saves the image to the bucket, inside a folder.
+            losses = []
+            acces = []
+            for img, label in tqdm(iter(test_dataloader)):
+                img = img.to(device)
+                label = label.to(device)
+                logits = model(img)
+                loss = loss_fn(logits, label)
+                acc = acc_fn(logits, label)
+                losses.append(loss.item())
+                acces.append(acc.item())
+            avg_val_loss = sum(losses) / len(losses)
+            avg_val_acc = sum(acces) / len(acces)
+            print(f'In epoch {e}, average validation loss is {avg_val_loss}, average validation acc is {avg_val_acc}.')
+            history['val_loss'].append(avg_val_loss)
+            history['acc_val'].append(avg_val_acc)
 
-        ''' save '''
-        torch.save(model, model_path)
+        if avg_val_acc > best_val_acc:
+            best_val_acc = avg_val_acc
+            history['best_val_acc'] = best_val_acc
 
     history_json = json.dumps(history)
-    save_history_to_gcs(history_json, experiment_name)
-
-
-# here is where I do the pretraining.
-
-mask_ratios = [0.3, 0.5, 0.75, 0.85]
-decoder_depths = [2, 4, 6, 8]
-
-for mask_ratio in mask_ratios:
-    experiment_name = f'e_{EPOCHS}_pretrain_mask_ratio_{mask_ratio}_decoder_depth_6'
-    pre_train(experiment_name, mask_ratio)
-    print(f'Experiment {experiment_name} is done!')
+    save_history_to_gcs(history_json, experiment_name + '_' + model_name)
+    print(history)
+    print(f'Experiment {experiment_name}_{model_name} is done!')
     print('-----------------------------------------------')
 
-# for decoder_depth in decoder_depths:
-#     experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
-#     pre_train(experiment_name, 0.75, decoder_depth)
-#     print(f'Experiment {experiment_name} is done!')
-#     print('-----------------------------------------------')
+
+if __name__ == '__main__':
+
+    mask_ratios = [0.3, 0.5, 0.75, 0.85]
+    # mask_ratios = [0.75]
+
+    for mask_ratio in mask_ratios:
+        experiment_name = 'linear_probe'
+        classification(experiment_name, mask_ratio)
+
+    for mask_ratio in mask_ratios:
+        experiment_name = 'fine_tune'
+        classification(experiment_name, mask_ratio)
+
+
+    # for decoder_depth in decoder_depths:
+    #     experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
+    #     pre_train(experiment_name, 0.75, decoder_depth)
+    #     print(f'Experiment {experiment_name} is done!')
+    #     print('-----------------------------------------------')
