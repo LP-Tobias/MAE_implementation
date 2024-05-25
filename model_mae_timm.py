@@ -49,25 +49,101 @@ def random_indexes(size: int):
     return forward_indexes, backward_indexes
 
 
+def block_indexes(size: int):
+    w = int(np.sqrt(size))
+    img_grid = np.arange(size).reshape(w, w)
+    forward_indexes = select_random_block(img_grid)
+    backward_indexes = np.argsort(forward_indexes)
+    return forward_indexes, backward_indexes
+
+
+def select_random_block(grid, block_size=128):
+    total_size = grid.size
+    rows, cols = grid.shape
+
+    block_rows = 8 if np.random.rand() < 0.5 else 16
+    block_cols = 16 if block_rows == 8 else 8
+
+    start_row = np.random.randint(rows - block_rows + 1)
+    start_col = np.random.randint(cols - block_cols + 1)
+
+    flat_indices = np.arange(total_size)
+    block_indices = flat_indices.reshape(rows, cols)
+
+    block_mask = np.zeros_like(grid, dtype=bool)
+    block_mask[start_row:start_row + block_rows, start_col:start_col + block_cols] = True
+    in_block = block_indices[block_mask]
+    outside_block = block_indices[~block_mask]
+
+    new_indices = np.concatenate([outside_block, in_block])
+    return new_indices
+
+
+def grid_indexes(size: int):
+    w = int(np.sqrt(size))
+    img_grid = np.arange(size).reshape(w, w)
+    forward_indexes, backward_indexes = skip_rows_cols(img_grid)
+    return forward_indexes, backward_indexes
+
+
+def skip_rows_cols(grid):
+    reduced_grid = grid[::2, ::2]
+    reduced_grid_flat = reduced_grid.flatten()
+    grid_flat = grid.flatten()
+
+    mask = np.isin(grid_flat, reduced_grid_flat)
+
+    forward_indexes = np.concatenate((reduced_grid_flat, grid_flat[~mask]))
+    backward_indexes = np.argsort(forward_indexes)
+    return forward_indexes, backward_indexes
+
+
 def take_indexes(sequences, indexes):
     return torch.gather(sequences, 0, repeat(indexes, 't b -> t b c', c=sequences.shape[-1]))
 
 
-class PatchShuffle(nn.Module):
-    def __init__(self, ratio) -> None:
+class PatchShuffle(torch.nn.Module):
+    def __init__(self,
+                 ratio=0.75,
+                 emb_dim=192,
+                 with_mask_token=True,
+                 mask_strategy='random') -> None:
         super().__init__()
         self.ratio = ratio
+        self.with_mask_token = with_mask_token
+        self.mask_strategy = mask_strategy
+        self.mask_token = torch.nn.Parameter(torch.zeros(1, 1, emb_dim))
 
     def forward(self, patches: torch.Tensor):
         T, B, C = patches.shape
+        # total patches, bach size, embedding dimension
         remain_T = int(T * (1 - self.ratio))
 
-        indexes = [random_indexes(T) for _ in range(B)]
-        forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
-        backward_indexes = torch.as_tensor(np.stack([i[1] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+        if self.mask_strategy == 'random':
+            indexes = [random_indexes(T) for _ in range(B)]
+            forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+            backward_indexes = torch.as_tensor(np.stack([i[1] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
 
-        patches = take_indexes(patches, forward_indexes)
-        patches = patches[:remain_T]
+            patches = take_indexes(patches, forward_indexes)
+            patches = patches[:remain_T]
+
+            if self.with_mask_token:
+                patches = torch.cat([patches, self.mask_token.expand(forward_indexes.shape[0] - patches.shape[0], patches.shape[1], -1)], dim=0)
+        elif self.mask_strategy == 'Block':
+            indexes = [block_indexes(T) for _ in range(B)]
+            forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+            backward_indexes = torch.as_tensor(np.stack([i[1] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+
+            patches = take_indexes(patches, forward_indexes)
+            patches = patches[:128] # fixed experiment of 50%
+
+        elif self.mask_strategy == 'Grid':
+            indexes = [grid_indexes(T) for _ in range(B)]
+            forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+            backward_indexes = torch.as_tensor(np.stack([i[1] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+
+            patches = take_indexes(patches, forward_indexes)
+            patches = patches[:remain_T]
 
         return patches, forward_indexes, backward_indexes
 
@@ -80,12 +156,14 @@ class MAE_Encoder(torch.nn.Module):
                  num_layer=12,
                  num_head=3,
                  mask_ratio=0.75,
+                 with_mask_token=False,
+                 mask_strategy='random'
                  ) -> None:
         super().__init__()
 
         self.cls_token = torch.nn.Parameter(torch.zeros(1, 1, emb_dim))
         self.pos_embedding = torch.nn.Parameter(torch.zeros((image_size // patch_size) ** 2, 1, emb_dim))
-        self.shuffle = PatchShuffle(mask_ratio)
+        self.shuffle = PatchShuffle(mask_ratio, emb_dim, with_mask_token, mask_strategy)
 
         self.patchify = torch.nn.Conv2d(3, emb_dim, patch_size, patch_size)
 
@@ -168,13 +246,15 @@ class MAE_ViT(torch.nn.Module):
                  emb_dim=192,
                  encoder_layer=12,
                  encoder_head=3,
-                 decoder_layer=6,
+                 decoder_layer=4,
                  decoder_head=3,
                  mask_ratio=0.75,
+                 with_mask_token=False,
+                 mask_strategy='random'
                  ) -> None:
         super().__init__()
 
-        self.encoder = MAE_Encoder(image_size, patch_size, emb_dim, encoder_layer, encoder_head, mask_ratio)
+        self.encoder = MAE_Encoder(image_size, patch_size, emb_dim, encoder_layer, encoder_head, mask_ratio, with_mask_token, mask_strategy)
         self.decoder = MAE_Decoder(image_size, patch_size, emb_dim, decoder_layer, decoder_head)
 
     def forward(self, img):
@@ -213,6 +293,7 @@ if __name__ == '__main__':
 
     img = torch.rand(2, 3, 32, 32)
     encoder = MAE_Encoder()
+    # decoder part...
     decoder = MAE_Decoder()
     features, backward_indexes = encoder(img)
     print(forward_indexes.shape)

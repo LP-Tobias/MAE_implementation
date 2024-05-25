@@ -36,7 +36,7 @@ def tensor_to_image(tensor):
 def upload_blob_from_memory(blob_data, destination_blob_name, content_type):
     """Uploads a file to the bucket from memory."""
     storage_client = storage.Client()
-    bucket = storage_client.bucket('experiment_results_22_5_1818')
+    bucket = storage_client.bucket('experiment_results_23_5')
     blob = bucket.blob(destination_blob_name)
 
     blob.upload_from_file(blob_data, content_type=content_type)
@@ -46,7 +46,7 @@ def upload_blob_from_memory(blob_data, destination_blob_name, content_type):
 
 def save_history_to_gcs(history_json, destination_blob_name):
     client = storage.Client()
-    bucket_name = 'experiment_results_22_5_1818'
+    bucket_name = 'experiment_results_23_5'
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_string(history_json, content_type='application/json')
