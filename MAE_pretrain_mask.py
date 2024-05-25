@@ -44,7 +44,7 @@ LEARNING_RATE = 1.5e-4
 WEIGHT_DECAY = 0.05
 
 # Pretraining parameters. Epochs here.
-EPOCHS = 1
+EPOCHS = 100
 
 # Augmentation parameters
 IMAGE_SIZE = 32
@@ -143,7 +143,7 @@ def pre_train_mask(experiment_type, experiment_name, mask_ratio=0.75, decoder_de
 
 if __name__ == '__main__':
 
-    experiments = ['w_masktoken', 'Block', 'Grid']
+    experiments = ['Block', 'Grid']
 
     for experiment in experiments:
         experiment_name = f'e_{EPOCHS}_pretrain_{experiment}_0.75_4'

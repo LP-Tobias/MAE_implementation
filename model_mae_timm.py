@@ -106,7 +106,7 @@ class PatchShuffle(torch.nn.Module):
     def __init__(self,
                  ratio=0.75,
                  emb_dim=192,
-                 with_mask_token=True,
+                 with_mask_token=False,
                  mask_strategy='random') -> None:
         super().__init__()
         self.ratio = ratio
@@ -127,8 +127,8 @@ class PatchShuffle(torch.nn.Module):
             patches = take_indexes(patches, forward_indexes)
             patches = patches[:remain_T]
 
-            if self.with_mask_token:
-                patches = torch.cat([patches, self.mask_token.expand(forward_indexes.shape[0] - patches.shape[0], patches.shape[1], -1)], dim=0)
+            # if self.with_mask_token:
+            #     patches = torch.cat([patches, self.mask_token.expand(forward_indexes.shape[0] - patches.shape[0], patches.shape[1], -1)], dim=0)
         elif self.mask_strategy == 'Block':
             indexes = [block_indexes(T) for _ in range(B)]
             forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
