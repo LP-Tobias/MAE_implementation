@@ -57,7 +57,7 @@ LAYER_NORM_EPS = 1e-6
 train_dataloader, test_dataloader, train_set, test_set = prepare_data_cifar(DATA_DIR, INPUT_SHAPE, IMAGE_SIZE, BATCH_SIZE)
 
 
-def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
+def classification(model_name, experiment_name, mask_ratio=0.75, decoder_depth=4):
     # for now the input only takes mask_ratio and decoder_depth.
     # for more experiments coming remember to also chang the name for model path, history name and so on.
 
@@ -66,8 +66,8 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
     model_path_pre = './model'
     if not os.path.exists(model_path_pre):
         os.makedirs(model_path_pre)
-    model_name = f'mae_pretrain_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
-    model_path = os.path.join(model_path_pre, model_name)
+    model_path_af = f'mae_pretrain_e_100_pretrain_{model_name}_0.75_4.pt'
+    model_path = os.path.join(model_path_pre, model_path_af)
 
     if experiment_name == 'linear_probe' or experiment_name == 'fine_tune':
         read_model = torch.load(model_path)
@@ -78,7 +78,7 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
 
     model = ViT_Classifier(encoder, num_classes=NUM_CLASSES).to(device)
 
-    print('model_loaded')
+    print(f'model_loaded: {model_path_af}')
 
     if torch.cuda.device_count() > 1:
         print(f"Use {torch.cuda.device_count()} GPUs.")
@@ -174,18 +174,24 @@ def classification(experiment_name, mask_ratio=0.75, decoder_depth=4):
 
 if __name__ == '__main__':
 
-    # mask_ratios = [0.3, 0.5, 0.75, 0.85]
-    mask_ratios = [0.85] # 0.85 left to do, 23/5
+    model_names = ['Block', 'Grid']
 
-    for mask_ratio in mask_ratios:
+    for model_name in model_names:
         experiment_name = 'linear_probe'
-        classification(experiment_name, mask_ratio)
-
-    for mask_ratio in mask_ratios:
+        classification(model_name, experiment_name)
         experiment_name = 'fine_tune'
-        classification(experiment_name, mask_ratio)
+        classification(model_name, experiment_name)
 
 
+    # mask_ratios = [0.3, 0.5, 0.75, 0.85]
+    #
+    # for mask_ratio in mask_ratios:
+    #     experiment_name = 'linear_probe'
+    #     classification(experiment_name, mask_ratio)
+    #
+    # for mask_ratio in mask_ratios:
+    #     experiment_name = 'fine_tune'
+    #     classification(experiment_name, mask_ratio)
     # for decoder_depth in decoder_depths:
     #     experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
     #     pre_train(experiment_name, 0.75, decoder_depth)
