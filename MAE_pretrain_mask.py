@@ -135,7 +135,7 @@ def pre_train_mask(experiment_type, experiment_name, mask_ratio=0.75, decoder_de
             # this saves the image to the bucket, inside a folder.
 
         ''' save '''
-        # torch.save(model, model_path)
+        torch.save(model, model_path)
 
     history_json = json.dumps(history)
     save_history_to_gcs(history_json, experiment_name)
