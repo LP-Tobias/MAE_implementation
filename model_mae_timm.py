@@ -127,8 +127,8 @@ class PatchShuffle(torch.nn.Module):
             patches = take_indexes(patches, forward_indexes)
             patches = patches[:remain_T]
 
-            # if self.with_mask_token:
-            #     patches = torch.cat([patches, self.mask_token.expand(forward_indexes.shape[0] - patches.shape[0], patches.shape[1], -1)], dim=0)
+            if self.with_mask_token:
+                patches = torch.cat([patches, self.mask_token.expand(forward_indexes.shape[0] - patches.shape[0], patches.shape[1], -1)], dim=0)
         elif self.mask_strategy == 'Block':
             indexes = [block_indexes(T) for _ in range(B)]
             forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
@@ -156,7 +156,7 @@ class MAE_Encoder(torch.nn.Module):
                  num_layer=12,
                  num_head=3,
                  mask_ratio=0.75,
-                 with_mask_token=False,
+                 with_mask_token=True,
                  mask_strategy='random'
                  ) -> None:
         super().__init__()
@@ -218,7 +218,10 @@ class MAE_Decoder(torch.nn.Module):
         trunc_normal_(self.pos_embedding, std=.02)
 
     def forward(self, features, backward_indexes):
-        T = features.shape[0]
+        if features.shape[0] == 257:
+            T = 65
+        else:
+            T = features.shape[0]
         backward_indexes = torch.cat([torch.zeros(1, backward_indexes.shape[1]).to(backward_indexes), backward_indexes + 1], dim=0)
         features = torch.cat([features, self.mask_token.expand(backward_indexes.shape[0] - features.shape[0], features.shape[1], -1)], dim=0)
         features = take_indexes(features, backward_indexes)

@@ -143,10 +143,11 @@ def pre_train_mask(experiment_type, experiment_name, mask_ratio=0.75, decoder_de
 
 if __name__ == '__main__':
 
-    experiments = ['Block', 'Grid']
+    experiments = ['w_masktoken']
 
     for experiment in experiments:
         experiment_name = f'e_{EPOCHS}_pretrain_{experiment}_0.75_4'
         pre_train_mask(experiment, experiment_name)
         print(f'Experiment {experiment_name} is done!')
         print('-----------------------------------------------')
+
