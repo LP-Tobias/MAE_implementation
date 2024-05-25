@@ -44,7 +44,7 @@ LEARNING_RATE = 1.5e-4
 WEIGHT_DECAY = 0.05
 
 # Pretraining parameters. Epochs here.
-EPOCHS = 100
+EPOCHS = 1
 
 # Augmentation parameters
 IMAGE_SIZE = 32
