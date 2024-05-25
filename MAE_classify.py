@@ -174,7 +174,7 @@ def classification(model_name, experiment_name, mask_ratio=0.75, decoder_depth=4
 
 if __name__ == '__main__':
 
-    model_names = ['Block', 'Grid']
+    model_names = ['w_masktoken']
 
     for model_name in model_names:
         experiment_name = 'linear_probe'
