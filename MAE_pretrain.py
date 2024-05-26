@@ -40,8 +40,8 @@ NUM_CLASSES = 10
 DATA_DIR = './data'
 
 # Optimizer parameters
-LEARNING_RATE = 1.5e-4
-WEIGHT_DECAY = 0.05
+LEARNING_RATE = 5e-3
+WEIGHT_DECAY = 1e-4
 
 # Pretraining parameters. Epochs here.
 EPOCHS = 100
@@ -83,10 +83,10 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=4):
     model_path_pre = './model'
     if not os.path.exists(model_path_pre):
         os.makedirs(model_path_pre)
-    model_name = f'new_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
+    model_name = f'large_lr_maskratio_{mask_ratio}_dec_depth_{decoder_depth}.pt'
     model_path = os.path.join(model_path_pre, model_name)
 
-    image_path = 'new_' + experiment_name + '/images'
+    image_path = experiment_name + '/images'
 
     step_count = 0
     optim.zero_grad()
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     mask_ratios = [0.75]
     #
     for mask_ratio in mask_ratios:
-        experiment_name = f'e_{EPOCHS}_pretrain_mask_ratio_{mask_ratio}_decoder_depth_4'
+        experiment_name = f'large_lr_e_{EPOCHS}_pretrain_mask_ratio_{mask_ratio}_decoder_depth_4'
         pre_train(experiment_name, mask_ratio)
         print(f'Experiment {experiment_name} is done!')
         print('-----------------------------------------------')
