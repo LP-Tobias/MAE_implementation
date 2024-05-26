@@ -107,7 +107,7 @@ def classification(model_name, experiment_name, mask_ratio=0.75, decoder_depth=4
 
     history = {
         'experiment': experiment_name,
-        'model': model_name,
+        'model': model_path_af,
         'train_loss': [],
         'val_loss': [],
         'acc_train': [],
@@ -168,9 +168,9 @@ def classification(model_name, experiment_name, mask_ratio=0.75, decoder_depth=4
             history['best_val_acc'] = best_val_acc
 
     history_json = json.dumps(history)
-    save_history_to_gcs(history_json, experiment_name + '_' + model_name)
+    save_history_to_gcs(history_json, experiment_name + '_' + f'maskratio_0.75_dec_depth_{decoder_depth}')
     # print(history)
-    print(f'Experiment {experiment_name}_{model_name} is done!')
+    print(f'Experiment {experiment_name}_dec_depth_{decoder_depth} is done!')
     print('-----------------------------------------------')
 
 
@@ -199,5 +199,4 @@ if __name__ == '__main__':
     for decoder_depth in decoder_depths:
         # experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
         classification(model_name=None, experiment_name='linear_probe', mask_ratio=0.75, decoder_depth=decoder_depth)
-        print(f'Experiment {experiment_name} is done!')
-        print('-----------------------------------------------')
+        classification(model_name=None, experiment_name='fine_tune', mask_ratio=0.75, decoder_depth=decoder_depth)
