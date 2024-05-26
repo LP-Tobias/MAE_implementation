@@ -44,7 +44,7 @@ LEARNING_RATE = 1.5e-4
 WEIGHT_DECAY = 0.05
 
 # Pretraining parameters. Epochs here.
-EPOCHS = 1
+EPOCHS = 100
 
 # Augmentation parameters
 IMAGE_SIZE = 32
@@ -121,7 +121,7 @@ def pre_train(experiment_name, mask_ratio=0.75, decoder_depth=4):
             predicted_val_img = predicted_val_img * mask + val_img * (1 - mask)
             img = torch.cat([val_img * (1 - mask), predicted_val_img, val_img], dim=0)
             img = rearrange(img, '(v h1 w1) c h w -> c (h1 h) (w1 v w)', w1=2, v=3)
-            image = tensor_to_image(img)
+            image = tensor_to_image((img + 1) / 2)
             image_buffer = io.BytesIO()
             image.save(image_buffer, format='JPEG')
             image_buffer.seek(0)
