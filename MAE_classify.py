@@ -66,7 +66,9 @@ def classification(model_name, experiment_name, mask_ratio=0.75, decoder_depth=4
     model_path_pre = './model'
     if not os.path.exists(model_path_pre):
         os.makedirs(model_path_pre)
-    model_path_af = f'mae_pretrain_e_100_pretrain_{model_name}_0.75_4.pt'
+    # model_path_af = f'mae_pretrain_e_100_pretrain_{model_name}_0.75_4.pt'
+    model_path_af = f'mae_pretrain_maskratio_0.75_dec_depth_{decoder_depth}.pt'
+
     model_path = os.path.join(model_path_pre, model_path_af)
 
     if experiment_name == 'linear_probe' or experiment_name == 'fine_tune':
@@ -174,13 +176,13 @@ def classification(model_name, experiment_name, mask_ratio=0.75, decoder_depth=4
 
 if __name__ == '__main__':
 
-    model_names = ['w_masktoken']
-
-    for model_name in model_names:
-        experiment_name = 'linear_probe'
-        classification(model_name, experiment_name)
-        experiment_name = 'fine_tune'
-        classification(model_name, experiment_name)
+    # model_names = ['w_masktoken']
+    #
+    # for model_name in model_names:
+    #     experiment_name = 'linear_probe'
+    #     classification(model_name, experiment_name)
+    #     experiment_name = 'fine_tune'
+    #     classification(model_name, experiment_name)
 
 
     # mask_ratios = [0.3, 0.5, 0.75, 0.85]
@@ -192,8 +194,10 @@ if __name__ == '__main__':
     # for mask_ratio in mask_ratios:
     #     experiment_name = 'fine_tune'
     #     classification(experiment_name, mask_ratio)
-    # for decoder_depth in decoder_depths:
-    #     experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
-    #     pre_train(experiment_name, 0.75, decoder_depth)
-    #     print(f'Experiment {experiment_name} is done!')
-    #     print('-----------------------------------------------')
+
+    decoder_depths = [2, 6, 8]
+    for decoder_depth in decoder_depths:
+        # experiment_name = f'pretrain_mask_ratio_0.75_decoder_depth_{decoder_depth}'
+        classification(model_name=None, experiment_name='linear_probe', mask_ratio=0.75, decoder_depth=decoder_depth)
+        print(f'Experiment {experiment_name} is done!')
+        print('-----------------------------------------------')
