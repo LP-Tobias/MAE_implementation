@@ -103,11 +103,7 @@ def take_indexes(sequences, indexes):
 
 
 class PatchShuffle(torch.nn.Module):
-    def __init__(self,
-                 ratio=0.75,
-                 emb_dim=192,
-                 with_mask_token=False,
-                 mask_strategy='random') -> None:
+    def __init__(self, ratio=0.75, emb_dim=192, with_mask_token=False, mask_strategy='random'):
         super().__init__()
         self.ratio = ratio
         self.with_mask_token = with_mask_token
@@ -149,22 +145,12 @@ class PatchShuffle(torch.nn.Module):
 
 
 class MAE_Encoder(torch.nn.Module):
-    def __init__(self,
-                 image_size=32,
-                 patch_size=2,
-                 emb_dim=192,
-                 num_layer=12,
-                 num_head=3,
-                 mask_ratio=0.75,
-                 with_mask_token=True,
-                 mask_strategy='random'
-                 ) -> None:
+    def __init__(self, image_size=32, patch_size=2, emb_dim=192, num_layer=12, num_head=3, mask_ratio=0.75, with_mask_token=True, mask_strategy='random'):
         super().__init__()
 
         self.cls_token = torch.nn.Parameter(torch.zeros(1, 1, emb_dim))
         self.pos_embedding = torch.nn.Parameter(torch.zeros((image_size // patch_size) ** 2, 1, emb_dim))
         self.shuffle = PatchShuffle(mask_ratio, emb_dim, with_mask_token, mask_strategy)
-
         self.patchify = torch.nn.Conv2d(3, emb_dim, patch_size, patch_size)
 
         self.transformer = torch.nn.Sequential(*[Block(emb_dim, num_head) for _ in range(num_layer)])
@@ -173,8 +159,13 @@ class MAE_Encoder(torch.nn.Module):
         self.init_weight()
 
     def init_weight(self):
-        trunc_normal_(self.cls_token, std=.02)
-        trunc_normal_(self.pos_embedding, std=.02)
+        # if go as original paper
+        # trunc_normal_(self.cls_token, std=.02)
+        # trunc_normal_(self.pos_embedding, std=.02)
+
+        # or use xiavier initialization
+        nn.init.xavier_uniform_(self.cls_token)
+        nn.init.xavier_uniform_(self.pos_embedding)
 
     def forward(self, img):
         # print('img shape', img.shape)
@@ -194,28 +185,25 @@ class MAE_Encoder(torch.nn.Module):
 
 
 class MAE_Decoder(torch.nn.Module):
-    def __init__(self,
-                 image_size=32,
-                 patch_size=2,
-                 emb_dim=192,
-                 num_layer=6,
-                 num_head=3,
-                 ) -> None:
+    def __init__(self, image_size=32, patch_size=2, emb_dim=192, num_layer=6, num_head=3):
         super().__init__()
 
         self.mask_token = torch.nn.Parameter(torch.zeros(1, 1, emb_dim))
         self.pos_embedding = torch.nn.Parameter(torch.zeros((image_size // patch_size) ** 2 + 1, 1, emb_dim))
-
         self.transformer = torch.nn.Sequential(*[Block(emb_dim, num_head) for _ in range(num_layer)])
-
         self.head = torch.nn.Linear(emb_dim, 3 * patch_size ** 2)
-        self.patch2img = Rearrange('(h w) b (c p1 p2) -> b c (h p1) (w p2)', p1=patch_size, p2=patch_size, h=image_size // patch_size)
-
+        self.patch2img = Rearrange('(h w) b (c p1 p2) -> b c (h p1) (w p2)',
+                                   p1=patch_size, p2=patch_size, h=image_size // patch_size)
         self.init_weight()
 
     def init_weight(self):
-        trunc_normal_(self.mask_token, std=.02)
-        trunc_normal_(self.pos_embedding, std=.02)
+        # if go as original paper
+        # trunc_normal_(self.cls_token, std=.02)
+        # trunc_normal_(self.pos_embedding, std=.02)
+
+        # or use xiavier initialization
+        nn.init.xavier_uniform_(self.cls_token)
+        nn.init.xavier_uniform_(self.pos_embedding)
 
     def forward(self, features, backward_indexes):
         if features.shape[0] == 257:
@@ -230,7 +218,7 @@ class MAE_Decoder(torch.nn.Module):
         features = rearrange(features, 't b c -> b t c')
         features = self.transformer(features)
         features = rearrange(features, 'b t c -> t b c')
-        features = features[1:]  # remove global feature
+        features = features[1:]  # remove cls token
 
         patches = self.head(features)
         mask = torch.zeros_like(patches)
@@ -287,20 +275,3 @@ class ViT_Classifier(torch.nn.Module):
         logits = self.head(features[0])
         return logits
 
-
-if __name__ == '__main__':
-    shuffle = PatchShuffle(0.75)
-    a = torch.rand(16, 2, 10)
-    b, forward_indexes, backward_indexes = shuffle(a)
-    print(b.shape)
-
-    img = torch.rand(2, 3, 32, 32)
-    encoder = MAE_Encoder()
-    # decoder part...
-    decoder = MAE_Decoder()
-    features, backward_indexes = encoder(img)
-    print(forward_indexes.shape)
-    predicted_img, mask = decoder(features, backward_indexes)
-    print(predicted_img.shape)
-    loss = torch.mean((predicted_img - img) ** 2 * mask / 0.75)
-    print(loss)

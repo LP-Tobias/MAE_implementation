@@ -124,6 +124,7 @@ def pre_train_mask(experiment_type, experiment_name, mask_ratio=0.75, decoder_de
             val_img = torch.stack([test_set[i][0] for i in range(8)])
             val_img = val_img.to(device)
             predicted_val_img, mask = model(val_img)
+            # combine predicted image with originally visible patches.
             predicted_val_img = predicted_val_img * mask + val_img * (1 - mask)
             img = torch.cat([val_img * (1 - mask), predicted_val_img, val_img], dim=0)
             img = rearrange(img, '(v h1 w1) c h w -> c (h1 h) (w1 v w)', w1=2, v=3)

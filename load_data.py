@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader, Subset, random_split
 def get_train_transforms(input_shape, image_size):
     return transforms.Compose([
         transforms.ToTensor(),  # Convert the image back to a tensor
-        # transforms.Resize((input_shape[0] + 20, input_shape[0] + 20)),  # Resize to INPUT_SHAPE + 20
-        # transforms.RandomCrop((image_size, image_size)),  # Random crop to IMAGE_SIZE
+        transforms.Resize((input_shape[0] + 20, input_shape[0] + 20)),  # Resize to INPUT_SHAPE + 20
+        transforms.RandomCrop((image_size, image_size)),  # Random crop to IMAGE_SIZE
         transforms.RandomHorizontalFlip(),  # Randomly flip the image horizontally
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize the image
     ])
